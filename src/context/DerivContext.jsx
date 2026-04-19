@@ -18,15 +18,12 @@ export const DerivProvider = ({ children }) => {
   // Fetch trades from Supabase on mount
   useEffect(() => {
     const fetchTrades = async () => {
+      if (!supabase) {
+        console.warn('Supabase client not initialized. Check your environment variables.');
+        return;
+      }
+
       try {
-        const url = import.meta.env.VITE_SUPABASE_URL;
-        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-        
-        if (!url || !key || url === 'your_supabase_url_here') {
-          console.warn('Supabase credentials missing or placeholders. Cloud sync disabled.');
-          return;
-        }
-        
         const { data, error } = await supabase
           .from('trades')
           .select('*')
@@ -34,7 +31,7 @@ export const DerivProvider = ({ children }) => {
           .limit(20);
         
         if (error) {
-          console.warn('Supabase request error (Table probably missing):', error.message);
+          console.warn('Supabase request error (Table probably missing or permissions issue):', error.message);
           return;
         }
         
@@ -48,9 +45,9 @@ export const DerivProvider = ({ children }) => {
   }, []);
 
   const saveTradeToCloud = async (trade) => {
-    try {
-      if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('your_')) return;
+    if (!supabase) return;
 
+    try {
       await supabase.from('trades').insert([trade]);
     } catch (err) {
       console.error('Failed to save trade to cloud:', err);
@@ -64,9 +61,12 @@ export const DerivProvider = ({ children }) => {
   };
 
   const connect = () => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) return;
+    if (socketRef.current && (socketRef.current.readyState === WebSocket.OPEN || socketRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
 
     try {
+      console.log('Initiating connection to Deriv WS...');
       const ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
@@ -89,8 +89,13 @@ export const DerivProvider = ({ children }) => {
       };
 
       ws.onclose = () => {
+        console.log('Deriv WS connection closed');
         setIsConnected(false);
         setTimeout(connect, 5000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('Deriv WS Error:', error);
       };
 
       socketRef.current = ws;
