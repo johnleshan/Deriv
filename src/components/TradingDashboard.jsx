@@ -177,7 +177,7 @@ const TradingDashboard = () => {
             <div className="balance-display flex-center glass" style={{ padding: '8px 16px', borderRadius: '12px', gap: '8px', border: '1px solid var(--accent-blue)' }}>
               <Wallet size={16} color="var(--accent-cyan)" />
               <span style={{ fontWeight: '800', letterSpacing: '0.5px' }}>
-                {balance.currency} {balance.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {balance?.currency || 'USD'} {(balance?.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
           </div>

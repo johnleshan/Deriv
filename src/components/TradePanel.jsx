@@ -13,7 +13,7 @@ const TradePanel = ({ symbol }) => {
       symbol,
       stake: parseFloat(stake),
       status: 'Open',
-      time: new Date().toLocaleTimeString(),
+      trade_time: new Date().toISOString(),
       profit: 0
     };
 

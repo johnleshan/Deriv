@@ -73,12 +73,15 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
     seriesRef.current = series;
 
     const handleResize = () => {
-      if (chartContainerRef.current) {
+      if (chartContainerRef.current && chartContainerRef.current.clientWidth > 0) {
         chart.applyOptions({ width: chartContainerRef.current.clientWidth });
       }
     };
 
     window.addEventListener('resize', handleResize);
+
+    // Initial resize to ensure correct width if rendered hidden
+    setTimeout(handleResize, 100);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -87,17 +90,23 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
   }, [mode]);
 
   useEffect(() => {
-    if (seriesRef.current && data.length > 0) {
+    if (seriesRef.current && data && data.length > 0) {
       seriesRef.current.setData(data);
     }
   }, [data]);
 
   const currentPrice = mode === 'line' 
-    ? data[data.length - 1]?.value 
-    : data[data.length - 1]?.close;
+    ? data?.[data.length - 1]?.value 
+    : data?.[data.length - 1]?.close;
 
   return (
-    <div className="chart-wrapper glass animate-slide-in" style={{ borderRadius: 'var(--card-radius)', overflow: 'hidden', padding: '24px', position: 'relative' }}>
+    <div className="chart-wrapper glass animate-slide-in" style={{ 
+      borderRadius: 'var(--card-radius)', 
+      overflow: 'hidden', 
+      padding: '24px', 
+      position: 'relative',
+      minHeight: '400px'
+    }}>
       <div className="chart-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <h3 style={{ fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.5px' }}>{symbol}</h3>
@@ -110,11 +119,11 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
         </div>
         <div style={{ textAlign: 'right' }}>
           <span className="price-tag text-gradient" style={{ fontWeight: '800', fontSize: '1.75rem', letterSpacing: '-1px' }}>
-            {currentPrice?.toFixed(2) || '0.00'}
+            {(currentPrice || 0).toFixed(2)}
           </span>
         </div>
       </div>
-      <div ref={chartContainerRef} />
+      <div ref={chartContainerRef} style={{ width: '100%', minHeight: containerHeight }} />
       
       {/* Timeframe selector overlay */}
       <div className="chart-actions" style={{ position: 'absolute', bottom: '24px', right: '24px', display: 'flex', gap: '8px', zIndex: 10 }}>

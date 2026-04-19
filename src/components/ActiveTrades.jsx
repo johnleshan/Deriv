@@ -33,22 +33,22 @@ const ActiveTrades = () => {
                     {trade.type === 'CALL' ? <ArrowUpRight color="var(--success)" size={20}/> : <ArrowDownRight color="var(--danger)" size={20}/>}
                   </div>
                   <div>
-                    <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>{trade.symbol.replace('_', ' ')}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>{trade.type} CONTRACT</div>
+                    <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>{trade.symbol?.replace('_', ' ') || 'Unknown Market'}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: '600' }}>{trade.type || 'TRADE'} CONTRACT</div>
                   </div>
                 </div>
 
                 <div className="desktop-only" style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>STAKE</div>
-                  <div style={{ fontWeight: '700' }}>${trade.stake}</div>
+                  <div style={{ fontWeight: '700' }}>${trade.stake || 0}</div>
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: trade.profit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: '800', fontSize: '1.1rem' }}>
-                    {trade.profit >= 0 ? '+' : ''}${trade.profit.toFixed(2)}
+                  <div style={{ color: (trade.profit || 0) >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: '800', fontSize: '1.1rem' }}>
+                    {(trade.profit || 0) >= 0 ? '+' : ''}${(trade.profit || 0).toFixed(2)}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--text-secondary)', justifyContent: 'flex-end', fontWeight: '600' }}>
-                    <Clock size={10} /> {trade.time}
+                    <Clock size={10} /> {trade.trade_time ? new Date(trade.trade_time).toLocaleTimeString() : 'Recent'}
                   </div>
                 </div>
               </div>
