@@ -7,6 +7,9 @@ const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
 const TOKEN = localStorage.getItem('deriv_token') || import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
+console.log('[Deriv Diagnostic] App ID Init:', APP_ID);
+console.log('[Deriv Diagnostic] WS URL:', WS_URL);
+
 export const DerivProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [balance, setBalance] = useState({ amount: 0, currency: 'USD' });
