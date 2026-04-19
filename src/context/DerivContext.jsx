@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { supabase } from '../supabaseClient';
 
 const DerivContext = createContext();
 
-const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
+const APP_ID = import.meta.env.VITE_SUPABASE_URL ? (import.meta.env.VITE_DERIV_APP_ID || '1089') : '1089';
 const TOKEN = localStorage.getItem('deriv_token') || import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
@@ -10,16 +11,40 @@ export const DerivProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [balance, setBalance] = useState({ amount: 0, currency: 'USD' });
   const [prices, setPrices] = useState({});
-  const [trades, setTrades] = useState(() => {
-    const saved = localStorage.getItem('deriv_trades');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  useEffect(() => {
-    localStorage.setItem('deriv_trades', JSON.stringify(trades));
-  }, [trades]);
+  const [trades, setTrades] = useState([]);
 
-  const socketRef = useRef(null);
+  // Fetch trades from Supabase on mount
+  useEffect(() => {
+    const fetchTrades = async () => {
+      if (!import.meta.env.VITE_SUPABASE_URL) return;
+      
+      const { data, error } = await supabase
+        .from('trades')
+        .select('*')
+        .order('trade_time', { ascending: false })
+        .limit(20);
+      
+      if (error) console.error('Error fetching trades:', error.message);
+      else if (data) setTrades(data);
+    };
+
+    fetchTrades();
+  }, []);
+
+  const saveTradeToCloud = async (trade) => {
+    if (!import.meta.env.VITE_SUPABASE_URL) return;
+
+    const { error } = await supabase
+      .from('trades')
+      .insert([trade]);
+
+    if (error) console.error('Error saving trade to cloud:', error.message);
+  };
+
+  const recordTrade = (trade) => {
+    setTrades(prev => [trade, ...prev.slice(0, 19)]);
+    saveTradeToCloud(trade);
+  };
   const subscriptionsRef = useRef({});
 
   const connect = () => {
@@ -208,7 +233,7 @@ export const DerivProvider = ({ children }) => {
       login,
       logout,
       trades,
-      setTrades
+      recordTrade
     }}>
       {children}
     </DerivContext.Provider>
