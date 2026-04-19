@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 
 const DerivContext = createContext();
 
-const APP_ID = '1089'; // Default public app_id for testing
+const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
+const TOKEN = import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
 export const DerivProvider = ({ children }) => {
@@ -18,8 +19,14 @@ export const DerivProvider = ({ children }) => {
     const ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
-      console.log('Connected to Deriv');
+      console.log('Connected to Deriv WebSocket');
       setIsConnected(true);
+      
+      // Authorize if token is available
+      if (TOKEN) {
+        ws.send(JSON.stringify({ authorize: TOKEN }));
+      }
+
       // Send ping every 30 seconds to keep connection alive
       setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -50,6 +57,12 @@ export const DerivProvider = ({ children }) => {
         ...prev,
         [symbol]: { quote, epoch },
       }));
+    }
+
+    if (data.msg_type === 'authorize') {
+      console.log('Authorized successfully:', data.authorize.email);
+      // Request balance after authorization
+      socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1 }));
     }
 
     if (data.msg_type === 'balance') {
