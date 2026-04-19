@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 
 const DerivContext = createContext();
 
-const APP_ID = import.meta.env.VITE_SUPABASE_URL ? (import.meta.env.VITE_DERIV_APP_ID || '1089') : '1089';
+const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
 const TOKEN = localStorage.getItem('deriv_token') || import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
@@ -12,92 +12,104 @@ export const DerivProvider = ({ children }) => {
   const [balance, setBalance] = useState({ amount: 0, currency: 'USD' });
   const [prices, setPrices] = useState({});
   const [trades, setTrades] = useState([]);
+  const socketRef = useRef(null);
+  const subscriptionsRef = useRef({});
 
   // Fetch trades from Supabase on mount
   useEffect(() => {
     const fetchTrades = async () => {
-      if (!import.meta.env.VITE_SUPABASE_URL) return;
-      
-      const { data, error } = await supabase
-        .from('trades')
-        .select('*')
-        .order('trade_time', { ascending: false })
-        .limit(20);
-      
-      if (error) console.error('Error fetching trades:', error.message);
-      else if (data) setTrades(data);
+      try {
+        const url = import.meta.env.VITE_SUPABASE_URL;
+        const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        if (!url || !key || url === 'your_supabase_url_here') {
+          console.warn('Supabase credentials missing or placeholders. Cloud sync disabled.');
+          return;
+        }
+        
+        const { data, error } = await supabase
+          .from('trades')
+          .select('*')
+          .order('trade_time', { ascending: false })
+          .limit(20);
+        
+        if (error) {
+          console.warn('Supabase request error (Table probably missing):', error.message);
+          return;
+        }
+        
+        if (data) setTrades(data);
+      } catch (err) {
+        console.warn('Supabase initialization or fetch failed. Continuing in offline mode.');
+      }
     };
 
     fetchTrades();
   }, []);
 
   const saveTradeToCloud = async (trade) => {
-    if (!import.meta.env.VITE_SUPABASE_URL) return;
+    try {
+      if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('your_')) return;
 
-    const { error } = await supabase
-      .from('trades')
-      .insert([trade]);
-
-    if (error) console.error('Error saving trade to cloud:', error.message);
+      await supabase.from('trades').insert([trade]);
+    } catch (err) {
+      console.error('Failed to save trade to cloud:', err);
+    }
   };
 
   const recordTrade = (trade) => {
-    setTrades(prev => [trade, ...prev.slice(0, 19)]);
-    saveTradeToCloud(trade);
+    const tradeWithId = { ...trade, id: trade.id || Date.now() };
+    setTrades(prev => [tradeWithId, ...prev.slice(0, 19)]);
+    saveTradeToCloud(tradeWithId);
   };
-  const subscriptionsRef = useRef({});
 
   const connect = () => {
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
 
-    const ws = new WebSocket(WS_URL);
+    try {
+      const ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => {
-      console.log('Connected to Deriv WebSocket');
-      setIsConnected(true);
-      
-      // Authorize if token is available
-      if (TOKEN) {
-        ws.send(JSON.stringify({ authorize: TOKEN }));
-      }
+      ws.onopen = () => {
+        console.log('Connected to Deriv WebSocket');
+        setIsConnected(true);
+        if (TOKEN) ws.send(JSON.stringify({ authorize: TOKEN }));
+        
+        setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
+        }, 30000);
+      };
 
-      // Send ping every 30 seconds to keep connection alive
-      setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ ping: 1 }));
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleMessage(data);
+        } catch (e) {
+          console.error('Error parsing WS message:', e);
         }
-      }, 30000);
-    };
+      };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      handleMessage(data);
-    };
+      ws.onclose = () => {
+        setIsConnected(false);
+        setTimeout(connect, 5000);
+      };
 
-    ws.onclose = () => {
-      console.log('Disconnected from Deriv');
-      setIsConnected(false);
-      // Reconnect after 5 seconds
-      setTimeout(connect, 5000);
-    };
-
-    socketRef.current = ws;
+      socketRef.current = ws;
+    } catch (e) {
+      console.error('WebSocket connection failed:', e);
+    }
   };
 
   const handleMessage = (data) => {
     if (data.msg_type === 'tick') {
       const { symbol, quote, epoch } = data.tick;
-      setPrices((prev) => ({
-        ...prev,
-        [symbol]: { quote, epoch },
-      }));
+      setPrices((prev) => ({ ...prev, [symbol]: { quote, epoch } }));
     }
 
     if (data.msg_type === 'candles') {
       const { candles } = data;
       setPrices((prev) => ({
         ...prev,
-        history: candles.map(c => ({
+        history: (candles || []).map(c => ({
           time: c.epoch,
           open: c.open,
           high: c.high,
@@ -121,13 +133,12 @@ export const DerivProvider = ({ children }) => {
       }));
     }
 
-    if (data.msg_type === 'authorize') {
-      console.log('Authorized successfully:', data.authorize.email);
-      // Request balance after authorization
+    if (data.msg_type === 'authorize' && !data.error) {
+      console.log('Authorized successfully');
       socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1 }));
     }
 
-    if (data.msg_type === 'balance') {
+    if (data.msg_type === 'balance' && data.balance) {
       setBalance({
         amount: data.balance.balance,
         currency: data.balance.currency,
@@ -135,7 +146,14 @@ export const DerivProvider = ({ children }) => {
     }
 
     if (data.error) {
-      console.error('Deriv API Error:', data.error.message);
+      console.warn('Deriv API Response Error:', data.error.message);
+    }
+  };
+
+  const subscribeToTick = (symbol) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN && !subscriptionsRef.current[symbol]) {
+      socketRef.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+      subscriptionsRef.current[symbol] = true;
     }
   };
 
@@ -153,30 +171,14 @@ export const DerivProvider = ({ children }) => {
     }
   };
 
-  const subscribeToTick = (symbol) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN && !subscriptionsRef.current[symbol]) {
-      console.log(`Subscribing to ${symbol}`);
-      socketRef.current.send(JSON.stringify({
-        ticks: symbol,
-        subscribe: 1
-      }));
-      subscriptionsRef.current[symbol] = true;
-    }
-  };
-
   const unsubscribeToTick = (symbol) => {
     if (socketRef.current?.readyState === WebSocket.OPEN && subscriptionsRef.current[symbol]) {
-      console.log(`Unsubscribing from ${symbol}`);
-      socketRef.current.send(JSON.stringify({
-        forget_all: 'ticks'
-      }));
+      socketRef.current.send(JSON.stringify({ forget_all: 'ticks' }));
       delete subscriptionsRef.current[symbol];
     }
   };
 
   const executeTrade = (params) => {
-    // Basic trade implementation placeholder
-    console.log('Executing trade:', params);
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({
         buy: 1,
@@ -194,27 +196,8 @@ export const DerivProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    // Check URL for OAuth tokens
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    const token1 = params.get('token1');
-    if (token1) {
-      console.log('Login successful, saving tokens...');
-      // In a real app, we'd store all accounts, but for now just the first one
-      localStorage.setItem('deriv_token', token1);
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    connect();
-    return () => {
-      if (socketRef.current) socketRef.current.close();
-    };
-  }, []);
-
   const login = () => {
-    const oauthUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=deriv`;
-    window.location.href = oauthUrl;
+    window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=deriv`;
   };
 
   const logout = () => {
@@ -222,18 +205,22 @@ export const DerivProvider = ({ children }) => {
     window.location.reload();
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token1 = params.get('token1');
+    if (token1) {
+      localStorage.setItem('deriv_token', token1);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    connect();
+    return () => { if (socketRef.current) socketRef.current.close(); };
+  }, []);
+
   return (
     <DerivContext.Provider value={{ 
-      isConnected, 
-      balance, 
-      prices, 
-      subscribeToTick, 
-      subscribeToCandles,
-      executeTrade,
-      login,
-      logout,
-      trades,
-      recordTrade
+      isConnected, balance, prices, subscribeToTick, 
+      subscribeToCandles, executeTrade, login, logout, 
+      trades, recordTrade 
     }}>
       {children}
     </DerivContext.Provider>

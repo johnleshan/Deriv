@@ -5,6 +5,21 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
   const chartContainerRef = useRef();
   const chartRef = useRef();
   const seriesRef = useRef();
+  const [containerHeight, setContainerHeight] = useState(450);
+
+  useEffect(() => {
+    const updateHeight = () => {
+      const height = window.innerWidth < 768 ? 300 : 450;
+      setContainerHeight(height);
+      if (chartRef.current) {
+        chartRef.current.applyOptions({ height });
+      }
+    };
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
 
   useEffect(() => {
     if (!chartContainerRef.current) return;
@@ -12,35 +27,45 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { color: 'transparent' },
-        textColor: '#9aa1b1',
+        textColor: '#8b949e',
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 450,
+      height: containerHeight,
       timeScale: {
         timeVisible: true,
         secondsVisible: true,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
       },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.05)',
+      },
+      crosshair: {
+        vertLine: { color: 'var(--accent-blue)', labelBackgroundColor: 'var(--accent-blue)' },
+        horzLine: { color: 'var(--accent-blue)', labelBackgroundColor: 'var(--accent-blue)' },
+      }
     });
 
     let series;
     if (mode === 'line') {
       series = chart.addAreaSeries({
         lineColor: '#00d1ff',
-        topColor: 'rgba(0, 209, 255, 0.2)',
+        topColor: 'rgba(0, 209, 255, 0.15)',
         bottomColor: 'rgba(0, 209, 255, 0)',
         lineWidth: 2,
+        priceFormat: { precision: 2, minMove: 0.01 },
       });
     } else {
       series = chart.addCandlestickSeries({
-        upColor: '#00f2ad',
-        downColor: '#ff4d4d',
+        upColor: '#23d18b',
+        downColor: '#f85149',
         borderVisible: false,
-        wickUpColor: '#00f2ad',
-        wickDownColor: '#ff4d4d',
+        wickUpColor: '#23d18b',
+        wickDownColor: '#f85149',
       });
     }
 
@@ -48,7 +73,9 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
     seriesRef.current = series;
 
     const handleResize = () => {
-      chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
     };
 
     window.addEventListener('resize', handleResize);
@@ -70,22 +97,35 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
     : data[data.length - 1]?.close;
 
   return (
-    <div className="chart-wrapper glass animate-fade-in" style={{ borderRadius: '12px', overflow: 'hidden', padding: '16px', position: 'relative' }}>
-      <div className="chart-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: '600' }}>{symbol}</h3>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{mode === 'line' ? 'Tick History' : '1m Candles'}</span>
+    <div className="chart-wrapper glass animate-slide-in" style={{ borderRadius: 'var(--card-radius)', overflow: 'hidden', padding: '24px', position: 'relative' }}>
+      <div className="chart-header" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.5px' }}>{symbol}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }}></span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: '500' }}>
+              {mode === 'line' ? 'Real-time Ticks' : '1 Minute Intervals'}
+            </span>
+          </div>
         </div>
-        <span className="price-tag" style={{ color: 'var(--accent-cyan)', fontWeight: '700', fontSize: '1.4rem' }}>
-          {currentPrice?.toFixed(2) || '0.00'}
-        </span>
+        <div style={{ textAlign: 'right' }}>
+          <span className="price-tag text-gradient" style={{ fontWeight: '800', fontSize: '1.75rem', letterSpacing: '-1px' }}>
+            {currentPrice?.toFixed(2) || '0.00'}
+          </span>
+        </div>
       </div>
       <div ref={chartContainerRef} />
       
-      {/* Chart Controls Overlay */}
-      <div style={{ position: 'absolute', bottom: '30px', right: '30px', display: 'flex', gap: '8px', zSelf: '10' }}>
-        <button className="glass" style={{ padding: '6px 12px', borderRadius: '4px', fontSize: '0.8rem', color: 'white', cursor: 'pointer' }}>1m</button>
-        <button className="glass" style={{ padding: '6px 12px', borderRadius: '4px', fontSize: '0.8rem', color: 'white', cursor: 'pointer' }}>5m</button>
+      {/* Timeframe selector overlay */}
+      <div className="chart-actions" style={{ position: 'absolute', bottom: '24px', right: '24px', display: 'flex', gap: '8px', zIndex: 10 }}>
+        {['1m', '5m', '15m'].map(tf => (
+          <button key={tf} className="glass" style={{ 
+            padding: '6px 14px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: '700', color: 'white', cursor: 'pointer', border: '1px solid var(--border-color)', transition: 'var(--transition)'
+          }}
+          onMouseEnter={(e) => e.target.style.borderColor = 'var(--accent-blue)'}
+          onMouseLeave={(e) => e.target.style.borderColor = 'var(--border-color)'}
+          >{tf}</button>
+        ))}
       </div>
     </div>
   );
