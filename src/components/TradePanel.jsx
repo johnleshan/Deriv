@@ -3,17 +3,29 @@ import { TrendingUp, TrendingDown, Clock, Wallet } from 'lucide-react';
 import { useDeriv } from '../context/DerivContext';
 
 const TradePanel = ({ symbol }) => {
-  const { executeTrade, isConnected } = useDeriv();
+  const { executeTrade, isConnected, setTrades } = useDeriv();
   const [stake, setStake] = useState(10);
   const [duration, setDuration] = useState(1);
 
   const handleTrade = (type) => {
+    const newTrade = {
+      id: Date.now(),
+      type: type === 'rise' ? 'CALL' : 'PUT',
+      symbol,
+      stake: parseFloat(stake),
+      status: 'Open',
+      time: 'Just now',
+      profit: 0
+    };
+
     executeTrade({
       symbol,
       contractType: type === 'rise' ? 'CALL' : 'PUT',
       stake,
       duration,
     });
+
+    setTrades(prev => [newTrade, ...prev.slice(0, 9)]);
   };
 
   return (

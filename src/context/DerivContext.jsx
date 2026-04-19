@@ -3,13 +3,22 @@ import React, { createContext, useContext, useEffect, useState, useRef } from 'r
 const DerivContext = createContext();
 
 const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
-const TOKEN = import.meta.env.VITE_DERIV_TOKEN;
+const TOKEN = localStorage.getItem('deriv_token') || import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
 export const DerivProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [balance, setBalance] = useState({ amount: 0, currency: 'USD' });
   const [prices, setPrices] = useState({});
+  const [trades, setTrades] = useState(() => {
+    const saved = localStorage.getItem('deriv_trades');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('deriv_trades', JSON.stringify(trades));
+  }, [trades]);
+
   const socketRef = useRef(null);
   const subscriptionsRef = useRef({});
 
@@ -59,6 +68,34 @@ export const DerivProvider = ({ children }) => {
       }));
     }
 
+    if (data.msg_type === 'candles') {
+      const { candles } = data;
+      setPrices((prev) => ({
+        ...prev,
+        history: candles.map(c => ({
+          time: c.epoch,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close
+        }))
+      }));
+    }
+
+    if (data.msg_type === 'ohlc') {
+      const { ohlc } = data;
+      setPrices((prev) => ({
+        ...prev,
+        lastOHLC: {
+          time: ohlc.epoch,
+          open: parseFloat(ohlc.open),
+          high: parseFloat(ohlc.high),
+          low: parseFloat(ohlc.low),
+          close: parseFloat(ohlc.close)
+        }
+      }));
+    }
+
     if (data.msg_type === 'authorize') {
       console.log('Authorized successfully:', data.authorize.email);
       // Request balance after authorization
@@ -74,6 +111,20 @@ export const DerivProvider = ({ children }) => {
 
     if (data.error) {
       console.error('Deriv API Error:', data.error.message);
+    }
+  };
+
+  const subscribeToCandles = (symbol, granularity = 60) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        ticks_history: symbol,
+        adjust_start_time: 1,
+        count: 100,
+        end: 'latest',
+        granularity,
+        style: 'candles',
+        subscribe: 1
+      }));
     }
   };
 
@@ -119,11 +170,32 @@ export const DerivProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Check URL for OAuth tokens
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const token1 = params.get('token1');
+    if (token1) {
+      console.log('Login successful, saving tokens...');
+      // In a real app, we'd store all accounts, but for now just the first one
+      localStorage.setItem('deriv_token', token1);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     connect();
     return () => {
       if (socketRef.current) socketRef.current.close();
     };
   }, []);
+
+  const login = () => {
+    const oauthUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=deriv`;
+    window.location.href = oauthUrl;
+  };
+
+  const logout = () => {
+    localStorage.removeItem('deriv_token');
+    window.location.reload();
+  };
 
   return (
     <DerivContext.Provider value={{ 
@@ -131,7 +203,12 @@ export const DerivProvider = ({ children }) => {
       balance, 
       prices, 
       subscribeToTick, 
-      executeTrade 
+      subscribeToCandles,
+      executeTrade,
+      login,
+      logout,
+      trades,
+      setTrades
     }}>
       {children}
     </DerivContext.Provider>
