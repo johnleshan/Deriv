@@ -21,7 +21,7 @@ const AccountCreation = ({ onCancel }) => {
   const handleSendEmail = (e) => {
     e.preventDefault();
     clearVerificationStatus();
-    verifyEmail(email, 'signup');
+    verifyEmail(email.trim(), 'account_opening');
   };
 
   const handleVerifyCode = (e) => {

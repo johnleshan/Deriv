@@ -284,9 +284,9 @@ export const DerivProvider = ({ children }) => {
     }
   };
 
-  const verifyEmail = (email, type = 'signup') => {
+  const verifyEmail = (email, type = 'account_opening') => {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ verify_email: email, type }));
+      socketRef.current.send(JSON.stringify({ verify_email: email.trim(), type }));
     }
   };
 
