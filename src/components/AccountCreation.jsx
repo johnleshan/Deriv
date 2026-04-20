@@ -31,7 +31,6 @@ const AccountCreation = ({ onCancel }) => {
 
   const handleCreateAccount = (e) => {
     e.preventDefault();
-    setLoading(true);
     createVirtualAccount({
       verification_code: verificationCode,
       client_password: password,

@@ -204,6 +204,7 @@ export const DerivProvider = ({ children }) => {
 
     if (data.msg_type === 'new_account_virtual' && !data.error) {
       console.log('Virtual account created successfully:', data.new_account_virtual);
+      setVerificationStatus(prev => ({ ...prev, loading: false }));
       // Automatically switch to the new account if token is returned
       if (data.new_account_virtual.oauth_token) {
         localStorage.setItem('deriv_token', data.new_account_virtual.oauth_token);
