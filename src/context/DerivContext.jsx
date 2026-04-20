@@ -215,6 +215,14 @@ export const DerivProvider = ({ children }) => {
     if (data.error) {
       console.warn('Deriv API Response Error:', data.error.message);
       setIsAuthorizing(false);
+      
+      // Stop any loading state and show the error to the user
+      setVerificationStatus(prev => ({
+        ...prev,
+        loading: false,
+        error: data.error.message
+      }));
+
       if (data.msg_type === 'authorize') {
         setActiveAccount(null);
         localStorage.removeItem('deriv_token');
@@ -292,7 +300,7 @@ export const DerivProvider = ({ children }) => {
   };
 
   const createVirtualAccount = (params) => {
-    setVerificationStatus(prev => ({ ...prev, loading: true }));
+    setVerificationStatus(prev => ({ ...prev, loading: true, error: null }));
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ new_account_virtual: 1, ...params }));
     }
