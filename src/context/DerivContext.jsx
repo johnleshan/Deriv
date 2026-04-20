@@ -28,6 +28,7 @@ export const DerivProvider = ({ children }) => {
   
   const socketRef = useRef(null);
   const subscriptionsRef = useRef({});
+  const pendingProfileRef = useRef(null);
 
   // Fetch trades from Supabase on mount
   useEffect(() => {
@@ -171,7 +172,14 @@ export const DerivProvider = ({ children }) => {
       if (data.authorize.account_list) {
         setAccounts(data.authorize.account_list);
       }
-      socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1, get_settings: 1 }));
+      
+      // Chain: If we have a pending profile update for a new account, apply it now
+      if (pendingProfileRef.current) {
+        socketRef.current.send(JSON.stringify({ set_settings: 1, ...pendingProfileRef.current }));
+        pendingProfileRef.current = null;
+      } else {
+        socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1, get_settings: 1 }));
+      }
     }
 
     if (data.msg_type === 'account_list' && data.account_list) {
@@ -184,7 +192,12 @@ export const DerivProvider = ({ children }) => {
 
     if (data.msg_type === 'set_settings' && !data.error) {
       console.log('Settings updated successfully');
-      socketRef.current.send(JSON.stringify({ get_settings: 1 }));
+      // If we are in the middle of account creation flow, reload after profile update
+      if (verificationStatus.loading) {
+        window.location.reload();
+      } else {
+        socketRef.current.send(JSON.stringify({ get_settings: 1 }));
+      }
     }
 
     if (data.msg_type === 'verify_email') {
@@ -204,11 +217,16 @@ export const DerivProvider = ({ children }) => {
 
     if (data.msg_type === 'new_account_virtual' && !data.error) {
       console.log('Virtual account created successfully:', data.new_account_virtual);
-      setVerificationStatus(prev => ({ ...prev, loading: false }));
       // Automatically switch to the new account if token is returned
       if (data.new_account_virtual.oauth_token) {
         localStorage.setItem('deriv_token', data.new_account_virtual.oauth_token);
-        window.location.reload();
+        // If we have profile data to apply, wait for auth to finish and then apply settings
+        if (pendingProfileRef.current) {
+          socketRef.current.send(JSON.stringify({ authorize: data.new_account_virtual.oauth_token }));
+        } else {
+          setVerificationStatus(prev => ({ ...prev, loading: false }));
+          window.location.reload();
+        }
       }
     }
 
@@ -299,8 +317,9 @@ export const DerivProvider = ({ children }) => {
     }
   };
 
-  const createVirtualAccount = (params) => {
+  const createVirtualAccount = (params, profileData = null) => {
     setVerificationStatus(prev => ({ ...prev, loading: true, error: null }));
+    pendingProfileRef.current = profileData;
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ new_account_virtual: 1, ...params }));
     }

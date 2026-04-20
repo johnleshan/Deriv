@@ -197,21 +197,6 @@ const TradingDashboard = () => {
                     </form>
                   </div>
 
-                  <div className="glass" style={{ padding: '32px', borderRadius: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-                      <Key size={20} color="var(--accent-cyan)" />
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: '700' }}>API & Security</h3>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                       <div className="flex-center" style={{ justifyContent: 'space-between', padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
-                          <div>
-                            <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>App ID</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Used for WebSocket authentication</div>
-                          </div>
-                          <code style={{ fontSize: '0.85rem', color: 'var(--accent-blue)', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: '6px' }}>{rawAppId}</code>
-                       </div>
-                    </div>
-                  </div>
                </div>
 
                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
