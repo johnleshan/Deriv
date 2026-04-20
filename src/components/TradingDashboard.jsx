@@ -59,9 +59,18 @@ const TradingDashboard = () => {
         time: prices[symbol.id].epoch,
         value: prices[symbol.id].quote,
       };
-      setChartData((prev) => [...prev.slice(-100), newPoint]);
+      
+      setChartData((prev) => {
+        const lastPoint = prev[prev.length - 1];
+        // Only add if it's a new timestamp to prevent chart errors
+        if (lastPoint && lastPoint.time === newPoint.time) {
+          // Update the value of the current second rather than adding a new point
+          return [...prev.slice(0, -1), newPoint];
+        }
+        return [...prev.slice(-149), newPoint];
+      });
     }
-  }, [prices[symbol.id]]);
+  }, [prices[symbol.id], chartMode]);
 
   useEffect(() => {
     if (chartMode === 'candles' && prices.history) {
@@ -358,8 +367,10 @@ const TradingDashboard = () => {
                   <User size={14} color="var(--accent-blue)" />
                 </div>
                 <div style={{ textAlign: 'left' }} className="desktop-only">
-                   <div style={{ fontSize: '0.75rem', fontWeight: '800', lineHeight: 1 }}>{activeAccount?.loginid || 'Authorizing...'}</div>
-                   <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{activeAccount?.is_virtual ? 'Demo' : 'Real'} Account</div>
+                   <div style={{ fontSize: '0.75rem', fontWeight: '800', lineHeight: 1 }}>{activeAccount?.loginid || (isAuthorizing ? 'Authorizing...' : 'No Account')}</div>
+                   <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                     {activeAccount ? (activeAccount.is_virtual ? 'Demo' : 'Real') : (isAuthorizing ? 'Syncing...' : 'Please Login')} Account
+                   </div>
                 </div>
                 <ChevronDown size={14} style={{ transform: isAccountSwitcherOpen ? 'rotate(180deg)' : 'rotate(0)', transition: '0.3s' }} />
               </button>

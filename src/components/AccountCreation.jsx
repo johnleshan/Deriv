@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDeriv } from '../context/DerivContext';
 import { Mail, ShieldCheck, UserPlus, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 

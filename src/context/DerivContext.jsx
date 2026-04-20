@@ -94,6 +94,14 @@ export const DerivProvider = ({ children }) => {
         setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
         }, 30000);
+
+        // Process pending subscriptions
+        Object.keys(subscriptionsRef.current).forEach(symbol => {
+          if (subscriptionsRef.current[symbol] === 'pending') {
+            ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+            subscriptionsRef.current[symbol] = true;
+          }
+        });
       };
 
       ws.onmessage = (event) => {
@@ -206,13 +214,23 @@ export const DerivProvider = ({ children }) => {
     if (data.error) {
       console.warn('Deriv API Response Error:', data.error.message);
       setIsAuthorizing(false);
+      if (data.msg_type === 'authorize') {
+        setActiveAccount(null);
+        localStorage.removeItem('deriv_token');
+      }
     }
   };
 
   const subscribeToTick = (symbol) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN && !subscriptionsRef.current[symbol]) {
-      socketRef.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
-      subscriptionsRef.current[symbol] = true;
+    if (!symbol) return;
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      if (!subscriptionsRef.current[symbol]) {
+        socketRef.current.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+        subscriptionsRef.current[symbol] = true;
+      }
+    } else {
+      // Queue for when socket opens
+      subscriptionsRef.current[symbol] = 'pending';
     }
   };
 
