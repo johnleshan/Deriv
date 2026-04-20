@@ -3,18 +3,28 @@ import { supabase } from '../supabaseClient';
 
 const DerivContext = createContext();
 
-const APP_ID = import.meta.env.VITE_DERIV_APP_ID || '1089';
+// Smart App ID detection: Extract only the numbers if it's alpha-numeric
+const rawAppId = import.meta.env.VITE_DERIV_APP_ID || '1089';
+const APP_ID = (rawAppId.match(/\d+/) || ['1089'])[0];
 const TOKEN = localStorage.getItem('deriv_token') || import.meta.env.VITE_DERIV_TOKEN;
 const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
-console.log('[Deriv Diagnostic] App ID Init:', APP_ID);
-console.log('[Deriv Diagnostic] WS URL:', WS_URL);
+console.log('[Deriv Connection] Using App ID:', APP_ID);
+if (rawAppId.length > APP_ID.length) {
+  console.log('[Deriv Connection] Extracted numeric ID from:', rawAppId);
+}
+console.log('[Deriv Connection] WS URL:', WS_URL);
 
 export const DerivProvider = ({ children }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [balance, setBalance] = useState({ amount: 0, currency: 'USD' });
   const [prices, setPrices] = useState({});
   const [trades, setTrades] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [activeAccount, setActiveAccount] = useState(null);
+  const [settings, setSettings] = useState({});
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  
   const socketRef = useRef(null);
   const subscriptionsRef = useRef({});
 
@@ -75,7 +85,10 @@ export const DerivProvider = ({ children }) => {
       ws.onopen = () => {
         console.log('Connected to Deriv WebSocket');
         setIsConnected(true);
-        if (TOKEN) ws.send(JSON.stringify({ authorize: TOKEN }));
+        if (TOKEN) {
+          setIsAuthorizing(true);
+          ws.send(JSON.stringify({ authorize: TOKEN, account_list: 1 }));
+        }
         
         setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ ping: 1 }));
@@ -94,6 +107,7 @@ export const DerivProvider = ({ children }) => {
       ws.onclose = () => {
         console.log('Deriv WS connection closed');
         setIsConnected(false);
+        setIsAuthorizing(false);
         setTimeout(connect, 5000);
       };
 
@@ -143,7 +157,25 @@ export const DerivProvider = ({ children }) => {
 
     if (data.msg_type === 'authorize' && !data.error) {
       console.log('Authorized successfully');
-      socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1 }));
+      setIsAuthorizing(false);
+      setActiveAccount(data.authorize);
+      if (data.authorize.account_list) {
+        setAccounts(data.authorize.account_list);
+      }
+      socketRef.current.send(JSON.stringify({ balance: 1, subscribe: 1, get_settings: 1 }));
+    }
+
+    if (data.msg_type === 'account_list' && data.account_list) {
+      setAccounts(data.account_list);
+    }
+
+    if (data.msg_type === 'get_settings' && data.get_settings) {
+      setSettings(data.get_settings);
+    }
+
+    if (data.msg_type === 'set_settings' && !data.error) {
+      console.log('Settings updated successfully');
+      socketRef.current.send(JSON.stringify({ get_settings: 1 }));
     }
 
     if (data.msg_type === 'balance' && data.balance) {
@@ -153,8 +185,18 @@ export const DerivProvider = ({ children }) => {
       });
     }
 
+    if (data.msg_type === 'new_account_virtual' && !data.error) {
+      console.log('Virtual account created successfully:', data.new_account_virtual);
+      // Automatically switch to the new account if token is returned
+      if (data.new_account_virtual.oauth_token) {
+        localStorage.setItem('deriv_token', data.new_account_virtual.oauth_token);
+        window.location.reload();
+      }
+    }
+
     if (data.error) {
       console.warn('Deriv API Response Error:', data.error.message);
+      setIsAuthorizing(false);
     }
   };
 
@@ -204,6 +246,29 @@ export const DerivProvider = ({ children }) => {
     }
   };
 
+  const switchToAccount = (token) => {
+    localStorage.setItem('deriv_token', token);
+    window.location.reload(); 
+  };
+
+  const updateSettings = (params) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ set_settings: 1, ...params }));
+    }
+  };
+
+  const verifyEmail = (email, type = 'signup') => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ verify_email: email, type }));
+    }
+  };
+
+  const createVirtualAccount = (params) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ new_account_virtual: 1, ...params }));
+    }
+  };
+
   const login = () => {
     window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=deriv`;
   };
@@ -228,7 +293,9 @@ export const DerivProvider = ({ children }) => {
     <DerivContext.Provider value={{ 
       isConnected, balance, prices, subscribeToTick, 
       subscribeToCandles, executeTrade, login, logout, 
-      trades, recordTrade 
+      trades, recordTrade, accounts, activeAccount, 
+      settings, switchToAccount, updateSettings, 
+      verifyEmail, createVirtualAccount, isAuthorizing, rawAppId
     }}>
       {children}
     </DerivContext.Provider>

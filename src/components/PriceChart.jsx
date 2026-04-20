@@ -34,7 +34,7 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
         vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
         horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
       },
-      width: chartContainerRef.current.clientWidth,
+      width: chartContainerRef.current.clientWidth || 600,
       height: containerHeight,
       timeScale: {
         timeVisible: true,
@@ -72,22 +72,22 @@ const PriceChart = ({ symbol, data = [], mode = 'line' }) => {
     chartRef.current = chart;
     seriesRef.current = series;
 
-    const handleResize = () => {
-      if (chartContainerRef.current && chartContainerRef.current.clientWidth > 0) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+    // Use ResizeObserver for more reliable resizing
+    const resizeObserver = new ResizeObserver(entries => {
+      if (entries.length === 0 || !chartRef.current) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0) {
+        chartRef.current.applyOptions({ width, height: containerHeight });
       }
-    };
+    });
 
-    window.addEventListener('resize', handleResize);
-
-    // Initial resize to ensure correct width if rendered hidden
-    setTimeout(handleResize, 100);
+    resizeObserver.observe(chartContainerRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       chart.remove();
     };
-  }, [mode]);
+  }, [mode, containerHeight]);
 
   useEffect(() => {
     if (seriesRef.current && data && data.length > 0) {
