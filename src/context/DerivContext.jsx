@@ -23,6 +23,7 @@ export const DerivProvider = ({ children }) => {
   const [accounts, setAccounts] = useState([]);
   const [activeAccount, setActiveAccount] = useState(null);
   const [settings, setSettings] = useState({});
+  const [settingsStatus, setSettingsStatus] = useState({ loading: false, success: false, error: null });
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState({ loading: false, sent: false, error: null });
   
@@ -188,10 +189,12 @@ export const DerivProvider = ({ children }) => {
 
     if (data.msg_type === 'get_settings' && data.get_settings) {
       setSettings(data.get_settings);
+      setSettingsStatus(prev => ({ ...prev, loading: false }));
     }
 
     if (data.msg_type === 'set_settings' && !data.error) {
       console.log('Settings updated successfully');
+      setSettingsStatus({ loading: false, success: true, error: null });
       // If we are in the middle of account creation flow, reload after profile update
       if (verificationStatus.loading) {
         window.location.reload();
@@ -240,6 +243,11 @@ export const DerivProvider = ({ children }) => {
         loading: false,
         error: data.error.message
       }));
+
+      // if the error happened during a settings update, show it
+      if (data.msg_type === 'set_settings' || data.msg_type === 'get_settings') {
+         setSettingsStatus({ loading: false, success: false, error: data.error.message });
+      }
 
       if (data.msg_type === 'authorize') {
         setActiveAccount(null);
@@ -306,6 +314,7 @@ export const DerivProvider = ({ children }) => {
   };
 
   const updateSettings = (params) => {
+    setSettingsStatus({ loading: true, success: false, error: null });
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ set_settings: 1, ...params }));
     }
@@ -354,7 +363,7 @@ export const DerivProvider = ({ children }) => {
       isConnected, balance, prices, subscribeToTick, 
       subscribeToCandles, executeTrade, login, logout, 
       trades, recordTrade, accounts, activeAccount, 
-      settings, switchToAccount, updateSettings, 
+      settings, settingsStatus, switchToAccount, updateSettings, 
       verifyEmail, createVirtualAccount, isAuthorizing, rawAppId,
       verificationStatus, clearVerificationStatus
     }}>

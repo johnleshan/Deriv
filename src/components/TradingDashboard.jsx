@@ -16,7 +16,7 @@ const TradingDashboard = () => {
     balance, isConnected, prices, subscribeToTick, 
     subscribeToCandles, unsubscribeToTick, login, logout, 
     trades, rawAppId, accounts, activeAccount, 
-    settings, switchToAccount, updateSettings, isAuthorizing 
+    settings, settingsStatus, switchToAccount, updateSettings, isAuthorizing 
   } = useDeriv();
   
   const [symbol, setSymbol] = useState({ id: 'R_100', name: 'Volatility 100 Index' });
@@ -191,8 +191,22 @@ const TradingDashboard = () => {
                           />
                         </div>
                       </div>
+                      
+                      {settingsStatus.error && (
+                        <div style={{ gridColumn: 'span 2', padding: '12px', background: 'rgba(248, 81, 73, 0.1)', color: 'var(--danger)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                          {settingsStatus.error}
+                        </div>
+                      )}
+                      {settingsStatus.success && (
+                        <div style={{ gridColumn: 'span 2', padding: '12px', background: 'rgba(46, 160, 67, 0.1)', color: 'var(--success)', borderRadius: '8px', fontSize: '0.85rem' }}>
+                          Profile updated successfully!
+                        </div>
+                      )}
+                      
                       <div style={{ gridColumn: 'span 2', marginTop: '12px' }}>
-                        <button className="btn-primary" type="submit" style={{ width: '100%' }}>Update Profile</button>
+                        <button className="btn-primary" type="submit" disabled={settingsStatus.loading} style={{ width: '100%' }}>
+                          {settingsStatus.loading ? 'Updating Profile...' : 'Update Profile'}
+                        </button>
                       </div>
                     </form>
                   </div>
