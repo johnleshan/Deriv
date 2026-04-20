@@ -24,6 +24,7 @@ export const DerivProvider = ({ children }) => {
   const [activeAccount, setActiveAccount] = useState(null);
   const [settings, setSettings] = useState({});
   const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState({ loading: false, sent: false, error: null });
   
   const socketRef = useRef(null);
   const subscriptionsRef = useRef({});
@@ -178,6 +179,14 @@ export const DerivProvider = ({ children }) => {
       socketRef.current.send(JSON.stringify({ get_settings: 1 }));
     }
 
+    if (data.msg_type === 'verify_email') {
+      setVerificationStatus({
+        loading: false,
+        sent: !data.error,
+        error: data.error ? data.error.message : null
+      });
+    }
+
     if (data.msg_type === 'balance' && data.balance) {
       setBalance({
         amount: data.balance.balance,
@@ -264,9 +273,14 @@ export const DerivProvider = ({ children }) => {
   };
 
   const createVirtualAccount = (params) => {
+    setVerificationStatus(prev => ({ ...prev, loading: true }));
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ new_account_virtual: 1, ...params }));
     }
+  };
+
+  const clearVerificationStatus = () => {
+    setVerificationStatus({ loading: false, sent: false, error: null });
   };
 
   const login = () => {
@@ -295,7 +309,8 @@ export const DerivProvider = ({ children }) => {
       subscribeToCandles, executeTrade, login, logout, 
       trades, recordTrade, accounts, activeAccount, 
       settings, switchToAccount, updateSettings, 
-      verifyEmail, createVirtualAccount, isAuthorizing, rawAppId
+      verifyEmail, createVirtualAccount, isAuthorizing, rawAppId,
+      verificationStatus, clearVerificationStatus
     }}>
       {children}
     </DerivContext.Provider>
